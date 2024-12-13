@@ -533,6 +533,9 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             };
         }
         debug!("codegen_place(place={:?}) => {:?}", place_ref, cg_base);
+        if std::env::var("DEBUG").is_ok() {
+            println!("[codegen_place] place={:?} cg_base={:?} (llval={:?}", place_ref, cg_base, cg_base.val.llval);
+        }
         cg_base
     }
 

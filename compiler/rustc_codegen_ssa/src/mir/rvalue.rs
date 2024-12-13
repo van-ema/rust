@@ -151,7 +151,28 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 dest.codegen_set_discr(bx, variant_index);
             }
 
+            mir::Rvalue::Ref(_, rustc_middle::mir::BorrowKind::Mut {..}, _) => {
+                if std::env ::var("DEBUG").is_ok() {
+                    print!("[codegen_rvalue_mut_ref] dest={:?} rvalue={:?}", dest, rvalue);
+                }
+                assert!(self.rvalue_creates_operand(rvalue, DUMMY_SP));
+                let temp = self.codegen_rvalue_operand(bx, rvalue);
+                bx.mut_ref_metadata(dest.val.llval);
+                temp.val.store(bx, dest);
+            }
+            mir::Rvalue::Ref(_, rustc_middle::mir::BorrowKind::Shared {..}, _) => {
+                if std::env ::var("DEBUG").is_ok() {
+                    print!("[codegen_rvalue_shared_ref] dest={:?} rvalue={:?}", dest, rvalue);
+                }
+                assert!(self.rvalue_creates_operand(rvalue, DUMMY_SP));
+                let temp = self.codegen_rvalue_operand(bx, rvalue);
+                bx.shared_ref_metadata(dest.val.llval);
+                temp.val.store(bx, dest);
+            }
             _ => {
+                if std::env ::var("DEBUG").is_ok() {
+                    print!("[codegen_rvalue_oth] dest={:?} rvalue={:?}", dest, rvalue);
+                }
                 assert!(self.rvalue_creates_operand(rvalue, DUMMY_SP));
                 let temp = self.codegen_rvalue_operand(bx, rvalue);
                 temp.val.store(bx, dest);

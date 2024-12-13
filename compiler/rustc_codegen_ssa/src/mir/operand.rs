@@ -490,6 +490,9 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
             }
             OperandValue::Immediate(s) => {
                 let val = bx.from_immediate(s);
+                if std::env ::var("DEBUG").is_ok() {
+                    println!("OperandValue::Immediate: val={:?}, dest.val.llval={:?} dest.val.extra={:?} dest.layout={:?}", val, dest.val.llval, dest.val.llextra, dest.layout);
+                }
                 bx.store_with_flags(val, dest.val.llval, dest.val.align, flags);
             }
             OperandValue::Pair(a, b) => {

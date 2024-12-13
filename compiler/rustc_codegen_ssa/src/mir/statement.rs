@@ -12,9 +12,36 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         self.set_debug_loc(bx, statement.source_info);
         match statement.kind {
             mir::StatementKind::Assign(box (ref place, ref rvalue)) => {
+                if std::env::var("DEBUG").is_ok() {
+                    println!("Assignment: {:?}", statement);
+                }
+
                 if let Some(index) = place.as_local() {
                     match self.locals[index] {
-                        LocalRef::Place(cg_dest) => self.codegen_rvalue(bx, cg_dest, rvalue),
+                        LocalRef::Place(cg_dest) => {
+                            // Here I can disscriminate based on rvalue type (ref, use, etc)
+                            // create different types of metadata
+                            if std::env::var("DEBUG").is_ok() {
+                                match *rvalue {
+                                    mir::Rvalue::Ref(_, _, ref_place) => {
+                                        if std::env::var("DEBUG").is_ok() {
+                                            println!("[LocalRef:Place] ref_place={:?} cg_dest={:?}",  ref_place, cg_dest);
+                                        }
+                                    }
+                                    mir::Rvalue::Use(ref operand) => {
+                                        if std::env::var("DEBUG").is_ok() {
+                                            println!("[LocalRef:Place] operand={:?} cg_dest={:?}",  operand, cg_dest);
+                                        }
+                                    }
+                                    _ => {
+                                        if std::env::var("DEBUG").is_ok() {
+                                            println!("LocalRef:Place rvalue {:?}", rvalue);
+                                        }
+                                    }
+                                }
+                            }
+                            self.codegen_rvalue(bx, cg_dest, rvalue);
+                        },
                         LocalRef::UnsizedPlace(cg_indirect_dest) => {
                             self.codegen_rvalue_unsized(bx, cg_indirect_dest, rvalue)
                         }
@@ -95,7 +122,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             | mir::StatementKind::AscribeUserType(..)
             | mir::StatementKind::ConstEvalCounter
             | mir::StatementKind::PlaceMention(..)
-            | mir::StatementKind::Nop => {}
+            | mir::StatementKind::Nop => {  
+                if std::env::var("DEBUG").is_ok() {
+                    println!("[*] StatementKind: {:?}", statement.kind);
+                } 
+            }
         }
     }
 }

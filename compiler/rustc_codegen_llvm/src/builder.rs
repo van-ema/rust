@@ -706,6 +706,41 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         }
     }
 
+    fn register_ref_metadata_kind(&self) -> u32 {
+        let name = "Ref";
+        unsafe {
+            llvm::LLVMGetMDKindIDInContext(self.cx.llcx, name.as_ptr() as *const _, name.len() as u32)
+        }
+    }
+
+    fn mut_ref_metadata(&mut self, value: &'ll Value) {
+        let kind: u32 = self.register_ref_metadata_kind();
+        let data = "Mut";
+        let data_val = unsafe {
+            llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
+        };
+        let metadata_node = unsafe {
+            llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1)
+        };
+        unsafe {
+            llvm::LLVMSetMetadata(value, kind, metadata_node);
+        }
+    }
+
+    fn shared_ref_metadata(&mut self, value: &'ll Value) {
+        let kind: u32 = self.register_ref_metadata_kind();
+        let data = "Shared";
+        let data_val = unsafe {
+            llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
+        };
+        let metadata_node = unsafe {
+            llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1)
+        };
+        unsafe {
+            llvm::LLVMSetMetadata(value, kind, metadata_node);
+        }
+    }
+
     fn store(&mut self, val: &'ll Value, ptr: &'ll Value, align: Align) -> &'ll Value {
         self.store_with_flags(val, ptr, align, MemFlags::empty())
     }
@@ -718,6 +753,9 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         flags: MemFlags,
     ) -> &'ll Value {
         debug!("Store {:?} -> {:?} ({:?})", val, ptr, flags);
+        if std::env ::var("DEBUG").is_ok() {
+            println!("Store {:?} -> {:?} ({:?})", val, ptr, flags);
+        }
         assert_eq!(self.cx.type_kind(self.cx.val_ty(ptr)), TypeKind::Pointer);
         unsafe {
             let store = llvm::LLVMBuildStore(self.llbuilder, val, ptr);
