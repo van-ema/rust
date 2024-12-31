@@ -723,7 +723,9 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1)
         };
         unsafe {
-            llvm::LLVMSetMetadata(value, kind, metadata_node);
+            if llvm::LLVMIsAInstruction(value).is_some() {
+                llvm::LLVMSetMetadata(value, kind, metadata_node);
+            }
         }
     }
 
@@ -737,7 +739,9 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1)
         };
         unsafe {
-            llvm::LLVMSetMetadata(value, kind, metadata_node);
+            if llvm::LLVMIsAInstruction(value).is_some() {
+                llvm::LLVMSetMetadata(value, kind, metadata_node);
+            }
         }
     }
 

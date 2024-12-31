@@ -43,14 +43,23 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                             self.codegen_rvalue(bx, cg_dest, rvalue);
                         },
                         LocalRef::UnsizedPlace(cg_indirect_dest) => {
+                            if std::env::var("DEBUG").is_ok() {
+                                println!("LocalRef:UnsizedPlace rvalue {:?}", rvalue);
+                            }
                             self.codegen_rvalue_unsized(bx, cg_indirect_dest, rvalue)
                         }
                         LocalRef::PendingOperand => {
-                            let operand = self.codegen_rvalue_operand(bx, rvalue);
+                            if std::env::var("DEBUG").is_ok() {
+                                println!("LocalRef:PendingOperand rvalue {:?}", rvalue);
+                            }
+                            let operand: super::operand::OperandRef<'_, <Bx as BackendTypes>::Value> = self.codegen_rvalue_operand(bx, rvalue);
                             self.overwrite_local(index, LocalRef::Operand(operand));
                             self.debug_introduce_local(bx, index);
                         }
                         LocalRef::Operand(op) => {
+                            if std::env::var("DEBUG").is_ok() {
+                                println!("LocalRef:Operand rvalue {:?}", rvalue);
+                            }
                             if !op.layout.is_zst() {
                                 span_bug!(
                                     statement.source_info.span,
@@ -65,6 +74,9 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         }
                     }
                 } else {
+                    if std::env::var("DEBUG").is_ok() {
+                        println!("Place is not a local - rvalue {:?}", rvalue);
+                    }
                     let cg_dest = self.codegen_place(bx, place.as_ref());
                     self.codegen_rvalue(bx, cg_dest, rvalue);
                 }

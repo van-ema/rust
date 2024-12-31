@@ -487,13 +487,16 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
                     bug!("cannot directly store unsized values");
                 }
                 bx.typed_place_copy_with_flags(dest.val, val, dest.layout, flags);
+                if std::env ::var("DEBUG").is_ok() {
+                    println!("[store_with_flags][Ref] dest={:?}", dest.val);
+                }
             }
             OperandValue::Immediate(s) => {
                 let val = bx.from_immediate(s);
-                if std::env ::var("DEBUG").is_ok() {
-                    println!("OperandValue::Immediate: val={:?}, dest.val.llval={:?} dest.val.extra={:?} dest.layout={:?}", val, dest.val.llval, dest.val.llextra, dest.layout);
-                }
                 bx.store_with_flags(val, dest.val.llval, dest.val.align, flags);
+                if std::env ::var("DEBUG").is_ok() {
+                    println!("[store_with_flags][Immediate] dest={:?}", dest.val);
+                }
             }
             OperandValue::Pair(a, b) => {
                 let Abi::ScalarPair(a_scalar, b_scalar) = dest.layout.abi else {
@@ -509,6 +512,9 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
                 let val = bx.from_immediate(b);
                 let align = dest.val.align.restrict_for_offset(b_offset);
                 bx.store_with_flags(val, llptr, align, flags);
+                if std::env ::var("DEBUG").is_ok() {
+                    println!("[store_with_flags][Pair] dest={:?}", dest.val);
+                }
             }
         }
     }
