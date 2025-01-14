@@ -152,23 +152,13 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 dest.codegen_set_discr(bx, variant_index);
             }
 
-            mir::Rvalue::Ref(_, rustc_middle::mir::BorrowKind::Mut {..}, _) => {
+            mir::Rvalue::Ref(_, bk, _) => {
                 if std::env ::var("DEBUG").is_ok() {
-                    println!("[codegen_rvalue_mut_ref] dest={:?} rvalue={:?}", dest, rvalue);
+                    println!("[codegen_rvalue_ref] dest={:?} rvalue={:?}", dest, rvalue);
                 }
                 assert!(self.rvalue_creates_operand(rvalue, DUMMY_SP));
-                let temp = self.codegen_rvalue_operand(bx, rvalue);
-                bx.mut_ref_metadata(dest.val.llval);
-                temp.val.store(bx, dest);
-            }
-            mir::Rvalue::Ref(_, rustc_middle::mir::BorrowKind::Shared {..}, _) => {
-                if std::env ::var("DEBUG").is_ok() {
-                    println!("[codegen_rvalue_shared_ref] dest={:?} rvalue={:?}", dest, rvalue);
-                }
-                assert!(self.rvalue_creates_operand(rvalue, DUMMY_SP));
-                let temp = self.codegen_rvalue_operand(bx, rvalue);
-                bx.shared_ref_metadata(dest.val.llval);
-                temp.val.store(bx, dest);
+                let temp: OperandRef<'_, <Bx as BackendTypes>::Value> = self.codegen_rvalue_operand(bx, rvalue);
+                temp.val.store_with_metadata(bx, dest, MemFlags::empty(), bk);
             }
             _ => {
                 if std::env ::var("DEBUG").is_ok() {
@@ -598,11 +588,12 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             mir::Rvalue::Ref(_, bk, place) => {
                 if std::env::var("DEBUG").is_ok() {
-                    println!("[codegen_rvalue_operand] Rvalue::Ref {:?}", rvalue);
+                    println!("[codegen_rvalue_operand] Rvalue::Ref {:?} mutability:{:?}", rvalue, bk);
                 }
                 let mk_ref = move |tcx: TyCtxt<'tcx>, ty: Ty<'tcx>| {
                     Ty::new_ref(tcx, tcx.lifetimes.re_erased, ty, bk.to_mutbl_lossy())
                 };
+
                 self.codegen_place_to_pointer_with_metadata(bx, place, mk_ref, bk)
             }
 
@@ -902,7 +893,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             BorrowKind::Mut { .. } => {
                 bx.mut_ref_metadata(cg_place.val.llval);
                 if std::env ::var("DEBUG").is_ok() {
-                    println!("[codegen_rvalue_shared] dest={:?}", cg_place.val.llval);
+                    println!("[codegen_rvalue_unique] dest={:?}", cg_place.val.llval);
                 }
             }
             _ => {}

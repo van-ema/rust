@@ -10,6 +10,7 @@ use rustc_middle::ty::layout::{LayoutOf, TyAndLayout};
 use rustc_middle::ty::Ty;
 use rustc_target::abi::{self, Abi, Align, Size};
 use tracing::debug;
+use rustc_middle::mir::BorrowKind;
 
 use super::place::{PlaceRef, PlaceValue};
 use super::{FunctionCx, LocalRef};
@@ -467,6 +468,67 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
         dest: PlaceRef<'tcx, V>,
     ) {
         self.store_with_flags(bx, dest, MemFlags::NONTEMPORAL);
+    }
+
+    pub(crate) fn store_with_metadata<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
+        self,
+        bx: &mut Bx,
+        dest: PlaceRef<'tcx, V>,
+        flags: MemFlags,
+        bk: BorrowKind,
+    ) {
+        debug!("OperandRef::store: operand={:?}, dest={:?}", self, dest);
+        match self {
+            OperandValue::ZeroSized => {
+                // Avoid generating stores of zero-sized values, because the only way to have a zero-sized
+                // value is through `undef`/`poison`, and the store itself is useless.
+            }
+            OperandValue::Ref(val) => {
+                assert!(dest.layout.is_sized(), "cannot directly store unsized values");
+                if val.llextra.is_some() {
+                    bug!("cannot directly store unsized values");
+                }
+                bx.typed_place_copy_with_flags(dest.val, val, dest.layout, flags);
+                if std::env ::var("DEBUG").is_ok() {
+                    println!("[store_with_flags][Ref] dest={:?}", dest.val);
+                }
+            }
+            OperandValue::Immediate(s) => {
+                let val = bx.from_immediate(s);
+                let store = bx.store_with_flags(val, dest.val.llval, dest.val.align, flags);
+                if std::env ::var("DEBUG").is_ok() {
+                    println!("[store_with_flags][Immediate] dest={:?}", dest.val);
+                }
+
+                match bk {
+                    BorrowKind::Shared => {
+                        bx.shared_ref_metadata(store);
+                    }
+                    BorrowKind::Mut { .. } => {
+                        bx.mut_ref_metadata(store);
+                    }
+                    _ => {}
+                }
+            }
+            OperandValue::Pair(a, b) => {
+                let Abi::ScalarPair(a_scalar, b_scalar) = dest.layout.abi else {
+                    bug!("store_with_flags: invalid ScalarPair layout: {:#?}", dest.layout);
+                };
+                let b_offset = a_scalar.size(bx).align_to(b_scalar.align(bx).abi);
+
+                let val = bx.from_immediate(a);
+                let align = dest.val.align;
+                bx.store_with_flags(val, dest.val.llval, align, flags);
+
+                let llptr = bx.inbounds_ptradd(dest.val.llval, bx.const_usize(b_offset.bytes()));
+                let val = bx.from_immediate(b);
+                let align = dest.val.align.restrict_for_offset(b_offset);
+                bx.store_with_flags(val, llptr, align, flags);
+                if std::env ::var("DEBUG").is_ok() {
+                    println!("[store_with_flags][Pair] dest={:?}", dest.val);
+                }
+            }
+        }
     }
 
     pub(crate) fn store_with_flags<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
