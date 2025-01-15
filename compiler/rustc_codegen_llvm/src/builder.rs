@@ -713,6 +713,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         }
     }
 
+
     fn mut_ref_metadata(&mut self, value: &'ll Value) {
         let kind: u32 = self.register_ref_metadata_kind();
         let data = "Mut";
@@ -732,6 +733,25 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     fn shared_ref_metadata(&mut self, value: &'ll Value) {
         let kind: u32 = self.register_ref_metadata_kind();
         let data = "Shared";
+        let data_val = unsafe {
+            llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
+        };
+        let metadata_node = unsafe {
+            llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1)
+        };
+        unsafe {
+            if llvm::LLVMIsAInstruction(value).is_some() {
+                llvm::LLVMSetMetadata(value, kind, metadata_node);
+            }
+        }
+    }
+
+    fn rawptr_metadata(&mut self, value: &'ll Value) {
+        let name = "RawPtr";
+        let kind = unsafe {
+            llvm::LLVMGetMDKindIDInContext(self.cx.llcx, name.as_ptr() as *const _, name.len() as u32)
+        };
+        let data = "";
         let data_val = unsafe {
             llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
         };

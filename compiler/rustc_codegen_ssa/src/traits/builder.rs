@@ -185,6 +185,7 @@ pub trait BuilderMethods<'a, 'tcx>:
     fn register_ref_metadata_kind(&self) -> u32;
     fn mut_ref_metadata(&mut self, load: Self::Value);
     fn shared_ref_metadata(&mut self, load: Self::Value);
+    fn rawptr_metadata(&mut self, load: Self::Value);
 
 
     fn store(&mut self, val: Self::Value, ptr: Self::Value, align: Align) -> Self::Value;
