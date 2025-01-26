@@ -132,7 +132,7 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def: LocalDefId) -> &BorrowCheckResult<'_> {
 /// Use `consumer_options: None` for the default behavior of returning
 /// [`BorrowCheckResult`] only. Otherwise, return [`BodyWithBorrowckFacts`] according
 /// to the given [`ConsumerOptions`].
-#[instrument(skip(tcx, input_body, input_promoted), fields(id=?input_body.source.def_id()), level = "debug")]
+// #[instrument(skip(tcx, input_body, input_promoted), fields(id=?input_body.source.def_id()), level = "debug")]
 fn do_mir_borrowck<'tcx>(
     tcx: TyCtxt<'tcx>,
     input_body: &Body<'tcx>,
