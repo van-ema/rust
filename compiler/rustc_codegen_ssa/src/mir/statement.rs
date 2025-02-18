@@ -55,6 +55,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                             let operand: super::operand::OperandRef<'_, <Bx as BackendTypes>::Value> = self.codegen_rvalue_operand(bx, rvalue);
                             self.overwrite_local(index, LocalRef::Operand(operand));
                             self.debug_introduce_local(bx, index);
+
                         }
                         LocalRef::Operand(op) => {
                             if std::env::var("DEBUG").is_ok() {
