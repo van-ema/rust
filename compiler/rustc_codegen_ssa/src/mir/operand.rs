@@ -5,12 +5,11 @@ use arrayvec::ArrayVec;
 use either::Either;
 use rustc_middle::bug;
 use rustc_middle::mir::interpret::{alloc_range, Pointer, Scalar};
-use rustc_middle::mir::{self, ConstValue};
+use rustc_middle::mir::{self, BorrowKind, ConstValue};
 use rustc_middle::ty::layout::{LayoutOf, TyAndLayout};
 use rustc_middle::ty::Ty;
 use rustc_target::abi::{self, Abi, Align, Size};
 use tracing::debug;
-use rustc_middle::mir::BorrowKind;
 
 use super::place::{PlaceRef, PlaceValue};
 use super::{FunctionCx, LocalRef};
@@ -488,14 +487,14 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
                     bug!("cannot directly store unsized values");
                 }
                 bx.typed_place_copy_with_flags(dest.val, val, dest.layout, flags);
-                if std::env ::var("DEBUG").is_ok() {
+                if std::env::var("DEBUG").is_ok() {
                     println!("[store_with_flags][Ref] dest={:?}", dest.val);
                 }
             }
             OperandValue::Immediate(s) => {
                 let val = bx.from_immediate(s);
                 let store = bx.store_with_flags(val, dest.val.llval, dest.val.align, flags);
-                if std::env ::var("DEBUG").is_ok() {
+                if std::env::var("DEBUG").is_ok() {
                     println!("[store_with_flags][Immediate] dest={:?}", dest.val);
                 }
 
@@ -515,7 +514,7 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
                 let val = bx.from_immediate(b);
                 let align = dest.val.align.restrict_for_offset(b_offset);
                 bx.store_with_flags(val, llptr, align, flags);
-                if std::env ::var("DEBUG").is_ok() {
+                if std::env::var("DEBUG").is_ok() {
                     println!("[store_with_flags][Pair] dest={:?}", dest.val);
                 }
             }
@@ -541,23 +540,26 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
                     bug!("cannot directly store unsized values");
                 }
                 bx.typed_place_copy_with_flags(dest.val, val, dest.layout, flags);
-                if std::env ::var("DEBUG").is_ok() {
-                    println!("[store_with_flags][Ref] dest={:?}", dest.val);
+                if std::env::var("DEBUG").is_ok() {
+                    println!("[store_with_metadata][Ref] dest={:?}", dest.val);
                 }
             }
             OperandValue::Immediate(s) => {
                 let val = bx.from_immediate(s);
                 let store = bx.store_with_flags(val, dest.val.llval, dest.val.align, flags);
-                if std::env ::var("DEBUG").is_ok() {
-                    println!("[store_with_flags][Immediate] dest={:?}", dest.val);
+                if std::env::var("DEBUG").is_ok() {
+                    println!(
+                        "[store_with_metadata][Immediate] dest={:?} immediate_val={:?} store:{:?}",
+                        dest.val, val, store
+                    );
                 }
 
                 match bk {
                     BorrowKind::Shared => {
-                        bx.shared_ref_metadata(store);
+                        bx.shared_ref_metadata2(store);
                     }
                     BorrowKind::Mut { .. } => {
-                        bx.mut_ref_metadata(store);
+                        bx.mut_ref_metadata2(store);
                     }
                     _ => {}
                 }
@@ -570,15 +572,26 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
 
                 let val = bx.from_immediate(a);
                 let align = dest.val.align;
-                bx.store_with_flags(val, dest.val.llval, align, flags);
-
+                let store = bx.store_with_flags(val, dest.val.llval, align, flags);
+                match bk {
+                    BorrowKind::Shared => {
+                        bx.shared_ref_metadata2(store);
+                    }
+                    BorrowKind::Mut { .. } => {
+                        bx.mut_ref_metadata2(store);
+                    }
+                    _ => {}
+                }
+                if std::env::var("DEBUG").is_ok() {
+                    println!(
+                        "[store_with_flags][Pair] dest={:?} val={:?} store={:?}",
+                        dest.val, val, store
+                    )
+                }
                 let llptr = bx.inbounds_ptradd(dest.val.llval, bx.const_usize(b_offset.bytes()));
                 let val = bx.from_immediate(b);
                 let align = dest.val.align.restrict_for_offset(b_offset);
                 bx.store_with_flags(val, llptr, align, flags);
-                if std::env ::var("DEBUG").is_ok() {
-                    println!("[store_with_flags][Pair] dest={:?}", dest.val);
-                }
             }
         }
     }
@@ -590,6 +603,7 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
         flags: MemFlags,
     ) {
         debug!("OperandRef::store: operand={:?}, dest={:?}", self, dest);
+        let ref_ty = dest.layout.ty;
         match self {
             OperandValue::ZeroSized => {
                 // Avoid generating stores of zero-sized values, because the only way to have a zero-sized
@@ -600,16 +614,31 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
                 if val.llextra.is_some() {
                     bug!("cannot directly store unsized values");
                 }
-                bx.typed_place_copy_with_flags(dest.val, val, dest.layout, flags);
-                if std::env ::var("DEBUG").is_ok() {
-                    println!("[store_with_flags][Ref] dest={:?}", dest.val);
+                if std::env::var("DEBUG").is_ok() {
+                    println!("[store_with_flags][Ref] dest={:?} immediate_val={:?}", dest.val, val);
                 }
+                bx.typed_place_copy_with_flags(dest.val, val, dest.layout, flags);
             }
             OperandValue::Immediate(s) => {
                 let val = bx.from_immediate(s);
-                bx.store_with_flags(val, dest.val.llval, dest.val.align, flags);
-                if std::env ::var("DEBUG").is_ok() {
-                    println!("[store_with_flags][Immediate] dest={:?}", dest.val);
+                let store = bx.store_with_flags(val, dest.val.llval, dest.val.align, flags);
+                if std::env::var("DEBUG").is_ok() {
+                    println!(
+                        "[store_with_flags][Immediate] dest={:?} immediate_val={:?} store:{:?}",
+                        dest.val, val, store
+                    );
+                }
+                if ref_ty.is_any_ptr() {
+                    if std::env::var("DEBUG").is_ok() {
+                        println!("is pointer!");
+                    }
+                    if ref_ty.is_unsafe_ptr() {
+                        bx.rawptr_metadata(store);
+                    } else if ref_ty.is_mutable_ptr() {
+                        bx.mut_ref_metadata(store);
+                    } else {
+                        bx.shared_ref_metadata(store);
+                    }
                 }
             }
             OperandValue::Pair(a, b) => {
@@ -620,15 +649,42 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
 
                 let val = bx.from_immediate(a);
                 let align = dest.val.align;
-                bx.store_with_flags(val, dest.val.llval, align, flags);
+                let store = bx.store_with_flags(val, dest.val.llval, align, flags);
+                if std::env::var("DEBUG").is_ok() {
+                    println!(
+                        "[store_with_flags][Pair1] dest={:?} val={:?} store={:?}",
+                        dest.val, val, store
+                    );
+                }
+                if ref_ty.is_any_ptr() {
+                    if ref_ty.is_unsafe_ptr() {
+                        bx.rawptr_metadata(store);
+                    } else if ref_ty.is_mutable_ptr() {
+                        bx.mut_ref_metadata(store);
+                    } else {
+                        bx.shared_ref_metadata(store);
+                    }
+                }
 
                 let llptr = bx.inbounds_ptradd(dest.val.llval, bx.const_usize(b_offset.bytes()));
                 let val = bx.from_immediate(b);
                 let align = dest.val.align.restrict_for_offset(b_offset);
-                bx.store_with_flags(val, llptr, align, flags);
-                if std::env ::var("DEBUG").is_ok() {
-                    println!("[store_with_flags][Pair] dest={:?}", dest.val);
+                let store = bx.store_with_flags(val, llptr, align, flags);
+                if std::env::var("DEBUG").is_ok() {
+                    println!(
+                        "[store_with_flags][Pair2] dest={:?} val={:?} store={:?}",
+                        dest.val, val, store
+                    );
                 }
+                // if ref_ty.is_any_ptr() {
+                //     if ref_ty.is_unsafe_ptr() {
+                //         bx.rawptr_metadata(val);
+                //     } else if ref_ty.is_mutable_ptr() {
+                //         bx.mut_ref_metadata(val);
+                //     } else {
+                //         bx.shared_ref_metadata(val);
+                //     }
+                // }
             }
         }
     }
@@ -744,7 +800,43 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         // for most places, to consume them we just load them
         // out from their home
         let place = self.codegen_place(bx, place_ref);
-        bx.load_operand(place)
+        let operand = bx.load_operand(place);
+        /* Check the place is deref or not */
+        let place_ty = place_ref.ty(self.mir, bx.tcx()).ty;
+        if place_ty.is_unsafe_ptr() {
+            match operand.val {
+                OperandValue::Pair(data_ptr, _) => {
+                    if place_ty.is_unsafe_ptr() {
+                        bx.rawptr_metadata(data_ptr);
+                    } else if place_ty.is_mutable_ptr() {
+                        bx.mut_ref_metadata(data_ptr);
+                    } else {
+                        bx.shared_ref_metadata(data_ptr);
+                    }
+                }
+                OperandValue::Immediate(data_ptr) => {
+                    if place_ty.is_unsafe_ptr() {
+                        bx.rawptr_metadata(data_ptr);
+                    } else if place_ty.is_mutable_ptr() {
+                        bx.mut_ref_metadata(data_ptr);
+                    } else {
+                        bx.shared_ref_metadata(data_ptr);
+                    }
+                }
+                OperandValue::Ref(pv) => {
+                    if place_ty.is_unsafe_ptr() {
+                        bx.rawptr_metadata(pv.llval);
+                    } else if place_ty.is_mutable_ptr() {
+                        bx.mut_ref_metadata(pv.llval);
+                    } else {
+                        bx.shared_ref_metadata(pv.llval);
+                    }
+                }
+                OperandValue::ZeroSized => {}
+            }
+        }
+
+        operand
     }
 
     pub fn codegen_operand(
@@ -756,7 +848,41 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
         match *operand {
             mir::Operand::Copy(ref place) | mir::Operand::Move(ref place) => {
-                self.codegen_consume(bx, place.as_ref())
+                let operand = self.codegen_consume(bx, place.as_ref());
+                let place_ty = place.ty(self.mir, bx.tcx()).ty;
+                if place_ty.is_unsafe_ptr() {
+                    match operand.val {
+                        OperandValue::Pair(data_ptr, _) => {
+                            if place_ty.is_unsafe_ptr() {
+                                bx.rawptr_metadata(data_ptr);
+                            } else if place_ty.is_mutable_ptr() {
+                                bx.mut_ref_metadata(data_ptr);
+                            } else {
+                                bx.shared_ref_metadata(data_ptr);
+                            }
+                        }
+                        OperandValue::Immediate(data_ptr) => {
+                            if place_ty.is_unsafe_ptr() {
+                                bx.rawptr_metadata(data_ptr);
+                            } else if place_ty.is_mutable_ptr() {
+                                bx.mut_ref_metadata(data_ptr);
+                            } else {
+                                bx.shared_ref_metadata(data_ptr);
+                            }
+                        }
+                        OperandValue::Ref(pv) => {
+                            if place_ty.is_unsafe_ptr() {
+                                bx.rawptr_metadata(pv.llval);
+                            } else if place_ty.is_mutable_ptr() {
+                                bx.mut_ref_metadata(pv.llval);
+                            } else {
+                                bx.shared_ref_metadata(pv.llval);
+                            }
+                        }
+                        OperandValue::ZeroSized => {}
+                    }
+                }
+                operand
             }
 
             mir::Operand::Constant(ref constant) => {

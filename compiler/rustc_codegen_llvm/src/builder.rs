@@ -709,10 +709,13 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     fn register_ref_metadata_kind(&self) -> u32 {
         let name = "Ref";
         unsafe {
-            llvm::LLVMGetMDKindIDInContext(self.cx.llcx, name.as_ptr() as *const _, name.len() as u32)
+            llvm::LLVMGetMDKindIDInContext(
+                self.cx.llcx,
+                name.as_ptr() as *const _,
+                name.len() as u32,
+            )
         }
     }
-
 
     fn mut_ref_metadata(&mut self, value: &'ll Value) {
         let kind: u32 = self.register_ref_metadata_kind();
@@ -720,9 +723,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         let data_val = unsafe {
             llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
         };
-        let metadata_node = unsafe {
-            llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1)
-        };
+        let metadata_node = unsafe { llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1) };
         unsafe {
             if llvm::LLVMIsAInstruction(value).is_some() {
                 llvm::LLVMSetMetadata(value, kind, metadata_node);
@@ -736,9 +737,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         let data_val = unsafe {
             llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
         };
-        let metadata_node = unsafe {
-            llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1)
-        };
+        let metadata_node = unsafe { llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1) };
         unsafe {
             if llvm::LLVMIsAInstruction(value).is_some() {
                 llvm::LLVMSetMetadata(value, kind, metadata_node);
@@ -752,9 +751,60 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         let data_val = unsafe {
             llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
         };
-        let metadata_node = unsafe {
-            llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1)
+        let metadata_node = unsafe { llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1) };
+        unsafe {
+            if llvm::LLVMIsAInstruction(value).is_some() {
+                llvm::LLVMSetMetadata(value, kind, metadata_node);
+            }
+        }
+    }
+
+    fn register_ref_metadata_kind2(&self) -> u32 {
+        let name = "Ref2";
+        unsafe {
+            llvm::LLVMGetMDKindIDInContext(
+                self.cx.llcx,
+                name.as_ptr() as *const _,
+                name.len() as u32,
+            )
+        }
+    }
+
+    fn mut_ref_metadata2(&mut self, value: &'ll Value) {
+        let kind: u32 = self.register_ref_metadata_kind2();
+        let data = "Mut";
+        let data_val = unsafe {
+            llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
         };
+        let metadata_node = unsafe { llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1) };
+        unsafe {
+            if llvm::LLVMIsAInstruction(value).is_some() {
+                llvm::LLVMSetMetadata(value, kind, metadata_node);
+            }
+        }
+    }
+
+    fn shared_ref_metadata2(&mut self, value: &'ll Value) {
+        let kind: u32 = self.register_ref_metadata_kind2();
+        let data = "Shared";
+        let data_val = unsafe {
+            llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
+        };
+        let metadata_node = unsafe { llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1) };
+        unsafe {
+            if llvm::LLVMIsAInstruction(value).is_some() {
+                llvm::LLVMSetMetadata(value, kind, metadata_node);
+            }
+        }
+    }
+
+    fn rawptr_metadata2(&mut self, value: &'ll Value) {
+        let kind: u32 = self.register_ref_metadata_kind2();
+        let data = "RawPtr";
+        let data_val = unsafe {
+            llvm::LLVMMDStringInContext(self.cx.llcx, data.as_ptr() as *const _, data.len() as u32)
+        };
+        let metadata_node = unsafe { llvm::LLVMMDNodeInContext(self.cx.llcx, &data_val, 1) };
         unsafe {
             if llvm::LLVMIsAInstruction(value).is_some() {
                 llvm::LLVMSetMetadata(value, kind, metadata_node);
@@ -774,7 +824,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         flags: MemFlags,
     ) -> &'ll Value {
         debug!("Store {:?} -> {:?} ({:?})", val, ptr, flags);
-        if std::env ::var("DEBUG").is_ok() {
+        if std::env::var("DEBUG").is_ok() {
             println!("Store {:?} -> {:?} ({:?})", val, ptr, flags);
         }
         assert_eq!(self.cx.type_kind(self.cx.val_ty(ptr)), TypeKind::Pointer);

@@ -1,6 +1,7 @@
 use std::assert_matches::assert_matches;
 
 use arrayvec::ArrayVec;
+use rustc_middle::mir::BorrowKind;
 use rustc_middle::ty::adjustment::PointerCoercion;
 use rustc_middle::ty::layout::{HasTyCtxt, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt};
@@ -152,15 +153,16 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             }
 
             mir::Rvalue::Ref(_, bk, _) => {
-                if std::env ::var("DEBUG").is_ok() {
+                if std::env::var("DEBUG").is_ok() {
                     println!("[codegen_rvalue_ref] dest={:?} rvalue={:?}", dest, rvalue);
                 }
                 assert!(self.rvalue_creates_operand(rvalue, DUMMY_SP));
-                let temp: OperandRef<'_, <Bx as BackendTypes>::Value> = self.codegen_rvalue_operand(bx, rvalue);
+                let temp: OperandRef<'_, <Bx as BackendTypes>::Value> =
+                    self.codegen_rvalue_operand(bx, rvalue);
                 temp.val.store_with_metadata(bx, dest, MemFlags::empty(), bk);
             }
             mir::Rvalue::RawPtr(_, _) => {
-                if std::env ::var("DEBUG").is_ok() {
+                if std::env::var("DEBUG").is_ok() {
                     println!("[codegen_rvalue] dest={:?} rvalue={:?}", dest, rvalue);
                 }
                 assert!(self.rvalue_creates_operand(rvalue, DUMMY_SP));
@@ -168,7 +170,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 temp.val.store_with_rawptr_metadata(bx, dest, MemFlags::empty());
             }
             _ => {
-                if std::env ::var("DEBUG").is_ok() {
+                if std::env::var("DEBUG").is_ok() {
                     println!("[codegen_rvalue] dest={:?} rvalue={:?}", dest, rvalue);
                 }
                 assert!(self.rvalue_creates_operand(rvalue, DUMMY_SP));
@@ -596,7 +598,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         OperandValue::Pair(data_ptr, _) => {
                             if cast_ty.is_unsafe_ptr() {
                                 bx.rawptr_metadata(data_ptr);
-                            } else if cast_ty.is_mutable_ptr(){
+                            } else if cast_ty.is_mutable_ptr() {
                                 bx.mut_ref_metadata(data_ptr);
                             } else {
                                 bx.shared_ref_metadata(data_ptr);
@@ -605,7 +607,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         OperandValue::Immediate(data_ptr) => {
                             if cast_ty.is_unsafe_ptr() {
                                 bx.rawptr_metadata(data_ptr);
-                            } else if cast_ty.is_mutable_ptr(){
+                            } else if cast_ty.is_mutable_ptr() {
                                 bx.mut_ref_metadata(data_ptr);
                             } else {
                                 bx.shared_ref_metadata(data_ptr);
@@ -614,13 +616,13 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         OperandValue::Ref(pv) => {
                             if cast_ty.is_unsafe_ptr() {
                                 bx.rawptr_metadata(pv.llval);
-                            } else if cast_ty.is_mutable_ptr(){
+                            } else if cast_ty.is_mutable_ptr() {
                                 bx.mut_ref_metadata(pv.llval);
                             } else {
                                 bx.shared_ref_metadata(pv.llval);
                             }
                         }
-                        OperandValue::ZeroSized => {},
+                        OperandValue::ZeroSized => {}
                     }
                 }
 
@@ -629,14 +631,17 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             mir::Rvalue::Ref(_, bk, place) => {
                 if std::env::var("DEBUG").is_ok() {
-                    println!("[codegen_rvalue_operand] Rvalue::Ref {:?} mutability:{:?}", rvalue, bk);
+                    println!(
+                        "[codegen_rvalue_operand] Rvalue::Ref {:?} mutability:{:?}",
+                        rvalue, bk
+                    );
                 }
                 let mk_ref = move |tcx: TyCtxt<'tcx>, ty: Ty<'tcx>| {
                     Ty::new_ref(tcx, tcx.lifetimes.re_erased, ty, bk.to_mutbl_lossy())
                 };
 
                 // self.codegen_place_to_pointer(bx, place, mk_ref)
-                self.codegen_place_to_pointer(bx, place, mk_ref)
+                self.codegen_place_to_pointer_with_metadata(bx, place, mk_ref, bk)
             }
 
             mir::Rvalue::CopyForDeref(place) => {
@@ -651,7 +656,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 }
                 let mk_ptr =
                     move |tcx: TyCtxt<'tcx>, ty: Ty<'tcx>| Ty::new_ptr(tcx, ty, mutability);
-                self.codegen_place_to_pointer(bx, place, mk_ptr)
+                self.codegen_place_to_raw_pointer(bx, place, mk_ptr)
             }
 
             mir::Rvalue::Len(place) => {
@@ -812,7 +817,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     println!("[codegen_rvalue_operand] Rvalue::Use {:?}", rvalue);
                 }
                 self.codegen_operand(bx, operand)
-            },
+            }
             mir::Rvalue::Repeat(..) => bug!("{rvalue:?} in codegen_rvalue_operand"),
             mir::Rvalue::Aggregate(_, ref fields) => {
                 let ty = rvalue.ty(self.mir, self.cx.tcx());
@@ -882,8 +887,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         cg_value.len(bx.cx())
     }
 
-    /// Codegen an `Rvalue::RawPtr` or `Rvalue::Ref`
-    fn codegen_place_to_pointer(
+    fn codegen_place_to_raw_pointer(
         &mut self,
         bx: &mut Bx,
         place: mir::Place<'tcx>,
@@ -901,40 +905,84 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             },
             "Address of place was unexpectedly {val:?} for pointee type {ty:?}",
         );
+        bx.rawptr_metadata2(cg_place.val.llval);
+        OperandRef { val, layout: self.cx.layout_of(mk_ptr_ty(self.cx.tcx(), ty)) }
+    }
 
-        if ty.is_any_ptr() {
+    /// Codegen an `Rvalue::RawPtr` or `Rvalue::Ref`
+    fn codegen_place_to_pointer_with_metadata(
+        &mut self,
+        bx: &mut Bx,
+        place: mir::Place<'tcx>,
+        mk_ptr_ty: impl FnOnce(TyCtxt<'tcx>, Ty<'tcx>) -> Ty<'tcx>,
+        bk: BorrowKind,
+    ) -> OperandRef<'tcx, Bx::Value> {
+        let cg_place = self.codegen_place(bx, place.as_ref());
+        let val = cg_place.val.address();
+
+        let ty = cg_place.layout.ty;
+        assert!(
+            if bx.cx().type_has_metadata(ty) {
+                matches!(val, OperandValue::Pair(..))
+            } else {
+                matches!(val, OperandValue::Immediate(..))
+            },
+            "Address of place was unexpectedly {val:?} for pointee type {ty:?}",
+        );
+
+        match bk {
+            BorrowKind::Shared => {
+                bx.shared_ref_metadata2(cg_place.val.llval);
+                if std::env::var("DEBUG").is_ok() {
+                    println!("[codegen_rvalue_shared] dest={:?}", cg_place.val.llval);
+                }
+            }
+            BorrowKind::Mut { .. } => {
+                bx.mut_ref_metadata2(cg_place.val.llval);
+                if std::env::var("DEBUG").is_ok() {
+                    println!("[codegen_rvalue_unique] dest={:?}", cg_place.val.llval);
+                }
+            }
+            _ => {}
+        }
+
+        let ptr_ty = mk_ptr_ty(bx.tcx(), ty);
+        if ptr_ty.is_any_ptr() {
+            if std::env::var("DEBUG").is_ok() {
+                println!("[codegen_place_to_pointer] place={:?}", place);
+            }
             match val {
                 OperandValue::Pair(data_ptr, _) => {
-                    if ty.is_unsafe_ptr() {
+                    if ptr_ty.is_unsafe_ptr() {
                         bx.rawptr_metadata(data_ptr);
-                    } else if ty.is_mutable_ptr(){
+                    } else if ptr_ty.is_mutable_ptr() {
                         bx.mut_ref_metadata(data_ptr);
                     } else {
                         bx.shared_ref_metadata(data_ptr);
                     }
                 }
                 OperandValue::Immediate(data_ptr) => {
-                    if ty.is_unsafe_ptr() {
+                    if ptr_ty.is_unsafe_ptr() {
                         bx.rawptr_metadata(data_ptr);
-                    } else if ty.is_mutable_ptr(){
+                    } else if ptr_ty.is_mutable_ptr() {
                         bx.mut_ref_metadata(data_ptr);
                     } else {
                         bx.shared_ref_metadata(data_ptr);
                     }
                 }
                 OperandValue::Ref(pv) => {
-                    if ty.is_unsafe_ptr() {
+                    if ptr_ty.is_unsafe_ptr() {
                         bx.rawptr_metadata(pv.llval);
-                    } else if ty.is_mutable_ptr(){
+                    } else if ptr_ty.is_mutable_ptr() {
                         bx.mut_ref_metadata(pv.llval);
                     } else {
                         bx.shared_ref_metadata(pv.llval);
                     }
                 }
-                OperandValue::ZeroSized => {},
+                OperandValue::ZeroSized => {}
             }
         }
-        OperandRef { val, layout: self.cx.layout_of(mk_ptr_ty(self.cx.tcx(), ty)) }
+        OperandRef { val, layout: self.cx.layout_of(ptr_ty) }
     }
 
     pub fn codegen_scalar_binop(
