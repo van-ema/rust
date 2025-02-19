@@ -3,14 +3,13 @@ use std::iter;
 use rustc_index::bit_set::BitSet;
 use rustc_index::IndexVec;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
-use rustc_middle::mir::{traversal, UnwindTerminateReason};
+use rustc_middle::mir::{traversal, LocalDecl, UnwindTerminateReason};
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, TyAndLayout};
-use rustc_middle::ty::{self, Instance, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
+use rustc_middle::ty::{self, Instance, Mutability, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
 use rustc_middle::{bug, mir, span_bug};
 use rustc_target::abi::call::{FnAbi, PassMode};
 use tracing::{debug, instrument};
-use rustc_middle::ty::Mutability;
-use rustc_middle::mir::LocalDecl;
+
 use crate::base;
 use crate::traits::*;
 
@@ -29,7 +28,6 @@ mod statement;
 use self::debuginfo::{FunctionDebugContext, PerLocalVarDebugInfo};
 use self::operand::{OperandRef, OperandValue};
 use self::place::PlaceRef;
-use crate::mir::place::PlaceValue;
 
 // Used for tracking the state of generated basic blocks.
 enum CachedLlbb<T> {
@@ -156,13 +154,6 @@ impl<'tcx, V: CodegenObject> LocalRef<'tcx, V> {
     }
 }
 
-fn check_local_mutability(local: &LocalDecl<'_>) -> &'static str {
-    match local.mutability {
-        Mutability::Mut => "mutable",
-        Mutability::Not => "shared",
-    }
-}
-
 ///////////////////////////////////////////////////////////////////////////
 
 #[instrument(level = "debug", skip(cx))]
@@ -224,7 +215,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     // evaluate; however, the `MirUsedCollector` already did that during the collection phase of
     // monomorphization, and if there is an error during collection then codegen never starts -- so
     // we don't have to do it again.
-    if std::env ::var("DEBUG").is_ok() {
+    if std::env::var("DEBUG").is_ok() {
         println!("");
         println!("[*] Function: {:?}", instance);
     }
@@ -300,40 +291,6 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             // We want to skip this block, because it's not reachable. But we still create
             // the block so terminators in other blocks can reference it.
             fx.codegen_block_as_unreachable(bb);
-        }
-    }
-
-    if std::env ::var("DEBUG").is_ok() {
-        for local in fx.locals.indices() {
-            let local_decl = &fx.mir.local_decls[local];
-            let mutability = check_local_mutability(local_decl);
-            println!("[*] New local declaration {:?}  (mutability:{})", local_decl, mutability);
-
-            // if fx.mir.local_kind(local) == mir::LocalKind::Arg {
-                let local_ref: &LocalRef<'tcx, <Bx as BackendTypes>::Value> = &fx.locals[local];
-                match local_ref {
-                    LocalRef::Place(place) | LocalRef::UnsizedPlace(place) => {
-                        println!("[Place] local:{:?} ({:?}) PlaceRef: {:?}", local, fx.mir.local_kind(local), place);
-                    }
-                    LocalRef::Operand(operand) => match operand.val {
-                        OperandValue::Ref(PlaceValue { llval: x, .. })  => {
-                            println!("[Operand] Ref:{:?} ({:?}) llval:{:?}", local,fx.mir.local_kind(local),  x);
-                        }
-                        OperandValue::Immediate(x)  => {
-                            println!("[Operand] Immediate:{:?} ({:?}) value: {:?}", local, fx.mir.local_kind(local), x);
-                        }
-                        OperandValue::Pair(a, _) => {
-                            println!("[Operand] Pair:{:?} ({:?}) value:{:?}", local, fx.mir.local_kind(local), a);
-                        }
-                        OperandValue::ZeroSized => {
-                            println!("[Operand] ZeroSized: {:?} ({:?})", local, fx.mir.local_kind(local));
-                        }
-                    },
-                    LocalRef::PendingOperand => {
-                        println!("[PendingOperand] {:?} ({:?})",  local, fx.mir.local_kind(local));
-                    }
-                }
-            // }
         }
     }
 }
@@ -512,18 +469,6 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             val: OperandValue::Immediate(bx.get_param(llarg_idx)),
             layout: arg.layout,
         });
-    }
-
-    for arg in args.iter() {
-        if let LocalRef::Place(place) = arg {
-            if std::env ::var("DEBUG_LOCALS").is_ok() {
-                match place.val {
-                    PlaceValue { llval: x, .. } => {
-                        println!("[arg] arg {:?} is a place {:?}", x, place);
-                    }
-                }
-            }
-        }
     }
     args
 }
