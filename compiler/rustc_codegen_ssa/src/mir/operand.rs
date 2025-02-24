@@ -508,7 +508,8 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
 
                 let val = bx.from_immediate(a);
                 let align = dest.val.align;
-                bx.store_with_flags(val, dest.val.llval, align, flags);
+                let store = bx.store_with_flags(val, dest.val.llval, align, flags);
+                bx.rawptr_metadata(store);
 
                 let llptr = bx.inbounds_ptradd(dest.val.llval, bx.const_usize(b_offset.bytes()));
                 let val = bx.from_immediate(b);
@@ -556,10 +557,10 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
 
                 match bk {
                     BorrowKind::Shared => {
-                        bx.shared_ref_metadata2(store);
+                        bx.shared_ref_metadata(store);
                     }
                     BorrowKind::Mut { .. } => {
-                        bx.mut_ref_metadata2(store);
+                        bx.mut_ref_metadata(store);
                     }
                     _ => {}
                 }
@@ -575,10 +576,10 @@ impl<'a, 'tcx, V: CodegenObject> OperandValue<V> {
                 let store = bx.store_with_flags(val, dest.val.llval, align, flags);
                 match bk {
                     BorrowKind::Shared => {
-                        bx.shared_ref_metadata2(store);
+                        bx.shared_ref_metadata(store);
                     }
                     BorrowKind::Mut { .. } => {
-                        bx.mut_ref_metadata2(store);
+                        bx.mut_ref_metadata(store);
                     }
                     _ => {}
                 }

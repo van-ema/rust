@@ -952,31 +952,31 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 println!("[codegen_place_to_pointer] place={:?}", place);
             }
             match val {
-                OperandValue::Pair(data_ptr, _) => {
+                OperandValue::Pair(_, _) => {
                     if ptr_ty.is_unsafe_ptr() {
-                        bx.rawptr_metadata(data_ptr);
+                        bx.rawptr_metadata(cg_place.val.llval);
                     } else if ptr_ty.is_mutable_ptr() {
-                        bx.mut_ref_metadata(data_ptr);
+                        bx.mut_ref_metadata(cg_place.val.llval);
                     } else {
-                        bx.shared_ref_metadata(data_ptr);
+                        bx.shared_ref_metadata(cg_place.val.llval);
                     }
                 }
-                OperandValue::Immediate(data_ptr) => {
+                OperandValue::Immediate(_) => {
                     if ptr_ty.is_unsafe_ptr() {
-                        bx.rawptr_metadata(data_ptr);
+                        bx.rawptr_metadata(cg_place.val.llval);
                     } else if ptr_ty.is_mutable_ptr() {
-                        bx.mut_ref_metadata(data_ptr);
+                        bx.mut_ref_metadata(cg_place.val.llval);
                     } else {
-                        bx.shared_ref_metadata(data_ptr);
+                        bx.shared_ref_metadata(cg_place.val.llval);
                     }
                 }
-                OperandValue::Ref(pv) => {
+                OperandValue::Ref(_) => {
                     if ptr_ty.is_unsafe_ptr() {
-                        bx.rawptr_metadata(pv.llval);
+                        bx.rawptr_metadata(cg_place.val.llval);
                     } else if ptr_ty.is_mutable_ptr() {
-                        bx.mut_ref_metadata(pv.llval);
+                        bx.mut_ref_metadata(cg_place.val.llval);
                     } else {
-                        bx.shared_ref_metadata(pv.llval);
+                        bx.shared_ref_metadata(cg_place.val.llval);
                     }
                 }
                 OperandValue::ZeroSized => {}
