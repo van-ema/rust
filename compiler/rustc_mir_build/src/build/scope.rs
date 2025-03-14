@@ -583,7 +583,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         if let LintLevel::Explicit(current_hir_id) = lint_level {
             let parent_id =
                 self.source_scopes[source_scope].local_data.as_ref().assert_crate_local().lint_root;
-            self.maybe_new_source_scope(region_scope.1.span, current_hir_id, parent_id);
+            self.maybe_new_source_scope(region_scope.1.span, None, current_hir_id, parent_id);
         }
         self.push_scope(region_scope);
         let mut block;
@@ -858,6 +858,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     pub(crate) fn maybe_new_source_scope(
         &mut self,
         span: Span,
+        safety: Option<Safety>,
         current_id: HirId,
         parent_id: HirId,
     ) {
@@ -887,7 +888,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
         if current_root != parent_root {
             let lint_level = LintLevel::Explicit(current_root);
-            self.source_scope = self.new_source_scope(span, lint_level);
+            self.source_scope = self.new_source_scope(span, lint_level, safety);
         }
     }
 
@@ -936,12 +937,18 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     }
 
     /// Creates a new source scope, nested in the current one.
-    pub(crate) fn new_source_scope(&mut self, span: Span, lint_level: LintLevel) -> SourceScope {
+    pub(crate) fn new_source_scope(
+        &mut self,
+        span: Span,
+        lint_level: LintLevel,
+        safety: Option<Safety>,
+    ) -> SourceScope {
         let parent = self.source_scope;
         debug!(
-            "new_source_scope({:?}, {:?}) - parent({:?})={:?}",
+            "new_source_scope({:?}, {:?}, {:?}) - parent({:?})={:?}",
             span,
             lint_level,
+            safety,
             parent,
             self.source_scopes.get(parent)
         );
@@ -951,6 +958,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             } else {
                 self.source_scopes[parent].local_data.as_ref().assert_crate_local().lint_root
             },
+            safety: safety.unwrap_or_else(|| {
+                self.source_scopes[parent].local_data.as_ref().assert_crate_local().safety
+            }),
         };
         self.source_scopes.push(SourceScopeData {
             span,

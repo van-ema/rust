@@ -120,12 +120,19 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             ExprKind::Box { value } => {
                 let value_ty = this.thir[value].ty;
                 let tcx = this.tcx;
-                let source_info = this.source_info(expr_span);
+
+                // `exchange_malloc` is unsafe but box is safe, so need a new scope.
+                let synth_scope = this.new_source_scope(
+                    expr_span,
+                    LintLevel::Inherited,
+                    Some(Safety::BuiltinUnsafe),
+                );
+                let synth_info = SourceInfo { span: expr_span, scope: synth_scope };
 
                 let size = this.temp(tcx.types.usize, expr_span);
                 this.cfg.push_assign(
                     block,
-                    source_info,
+                    synth_info,
                     size,
                     Rvalue::NullaryOp(NullOp::SizeOf, value_ty),
                 );
@@ -133,7 +140,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let align = this.temp(tcx.types.usize, expr_span);
                 this.cfg.push_assign(
                     block,
-                    source_info,
+                    synth_info,
                     align,
                     Rvalue::NullaryOp(NullOp::AlignOf, value_ty),
                 );
@@ -149,7 +156,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let success = this.cfg.start_new_block();
                 this.cfg.terminate(
                     block,
-                    source_info,
+                    synth_info,
                     TerminatorKind::Call {
                         func: exchange_malloc,
                         args: [

@@ -39,6 +39,7 @@ use crate::{attributes, llvm_util};
 pub(crate) struct Builder<'a, 'll, 'tcx> {
     pub llbuilder: &'ll mut llvm::Builder<'ll>,
     pub cx: &'a CodegenCx<'ll, 'tcx>,
+    pub safety: bool,
 }
 
 impl Drop for Builder<'_, '_, '_> {
@@ -153,6 +154,14 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
 
     fn llbb(&self) -> &'ll BasicBlock {
         unsafe { llvm::LLVMGetInsertBlock(self.llbuilder) }
+    }
+
+    fn set_safety(&mut self, value: bool) {
+        self.safety = value;
+    }
+
+    fn get_safety(&self) -> bool {
+        self.safety
     }
 
     fn set_span(&mut self, _span: Span) {}
@@ -1436,6 +1445,11 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             attributes::apply_to_callsite(llret, llvm::AttributePlace::Function, &[cold_inline]);
         }
     }
+
+    fn insert_unsafe_metadata(&mut self, _value: Self::Value) {
+        todo!()
+    }
+
 }
 
 impl<'ll> StaticBuilderMethods for Builder<'_, 'll, '_> {
@@ -1449,7 +1463,7 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
     fn with_cx(cx: &'a CodegenCx<'ll, 'tcx>) -> Self {
         // Create a fresh builder from the crate context.
         let llbuilder = unsafe { llvm::LLVMCreateBuilderInContext(cx.llcx) };
-        Builder { llbuilder, cx }
+        Builder { llbuilder, safety:false, cx }
     }
 
     pub(crate) fn llfn(&self) -> &'ll Value {

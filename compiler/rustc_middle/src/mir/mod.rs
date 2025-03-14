@@ -806,6 +806,17 @@ impl<'tcx> Body<'tcx> {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug, TyEncodable, TyDecodable, HashStable)]
+pub enum Safety {
+    Safe,
+    /// Unsafe because of compiler-generated unsafe code, like `await` desugaring
+    BuiltinUnsafe,
+    /// Unsafe because of an unsafe fn
+    FnUnsafe,
+    /// Unsafe because of an `unsafe` block
+    ExplicitUnsafe(hir::HirId),
+}
+
 impl<'tcx> Index<BasicBlock> for Body<'tcx> {
     type Output = BasicBlockData<'tcx>;
 
@@ -1561,6 +1572,8 @@ pub struct SourceScopeData<'tcx> {
 pub struct SourceScopeLocalData {
     /// An `HirId` with lint levels equivalent to this scope's lint levels.
     pub lint_root: HirId,
+    /// The unsafe block that contains this node.
+    pub safety: Safety,
 }
 
 /// A collection of projections into user types.
@@ -1837,7 +1850,7 @@ mod size_asserts {
     // tidy-alphabetical-start
     static_assert_size!(BasicBlockData<'_>, 128);
     static_assert_size!(LocalDecl<'_>, 40);
-    static_assert_size!(SourceScopeData<'_>, 64);
+    static_assert_size!(SourceScopeData<'_>, 72);
     static_assert_size!(Statement<'_>, 32);
     static_assert_size!(Terminator<'_>, 96);
     static_assert_size!(VarDebugInfo<'_>, 88);

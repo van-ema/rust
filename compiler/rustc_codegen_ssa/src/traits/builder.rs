@@ -48,6 +48,8 @@ pub trait BuilderMethods<'a, 'tcx>:
 
     fn cx(&self) -> &Self::CodegenCx;
     fn llbb(&self) -> Self::BasicBlock;
+    fn set_safety(&mut self, value: bool);
+    fn get_safety(&self)-> bool;
 
     fn set_span(&mut self, span: Span);
 
@@ -182,6 +184,7 @@ pub trait BuilderMethods<'a, 'tcx>:
 
     fn range_metadata(&mut self, load: Self::Value, range: WrappingRange);
     fn nonnull_metadata(&mut self, load: Self::Value);
+
     fn register_ref_metadata_kind(&self) -> u32;
     fn mut_ref_metadata(&mut self, load: Self::Value);
     fn shared_ref_metadata(&mut self, load: Self::Value);
@@ -190,6 +193,8 @@ pub trait BuilderMethods<'a, 'tcx>:
     fn mut_ref_metadata2(&mut self, load: Self::Value);
     fn shared_ref_metadata2(&mut self, load: Self::Value);
     fn rawptr_metadata2(&mut self, load: Self::Value);
+
+    fn insert_unsafe_metadata(&mut self, value: Self::Value);
 
     fn store(&mut self, val: Self::Value, ptr: Self::Value, align: Align) -> Self::Value;
     fn store_to_place(&mut self, val: Self::Value, place: PlaceValue<Self::Value>) -> Self::Value {
