@@ -846,6 +846,9 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     fn insert_unsafe_metadata(&mut self, _inst: &'ll Value) {
         if self.safety {
             unsafe {
+                if !llvm::LLVMIsAInstruction(_inst).is_some() {
+                    return;
+                }
                 let key: &str = "Unsafe";
                 let kind = llvm::LLVMGetMDKindIDInContext(
                     self.cx.llcx,

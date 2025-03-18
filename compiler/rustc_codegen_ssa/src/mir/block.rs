@@ -1256,6 +1256,26 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             debug!("codegen_block({:?}={:?})", bb, data);
 
             for statement in &data.statements {
+                let unsafe_or_not =
+                    if let Some(scope_data) = mir.source_scopes.get(statement.source_info.scope) {
+                        // writeln!(&mut file, "scope_data : {:?}", scope_data ).expect("Unable to write file");
+                        if let mir::ClearCrossCrate::Set(ref localdata) = scope_data.local_data {
+                            if let mir::Safety::ExplicitUnsafe(_) = localdata.safety {
+                                true
+                            } else if let mir::Safety::BuiltinUnsafe = localdata.safety {
+                                true
+                            } else if let mir::Safety::FnUnsafe = localdata.safety {
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                bx.set_safety(unsafe_or_not);
                 self.codegen_statement(bx, statement);
             }
 
@@ -1296,6 +1316,26 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         terminator: &'tcx mir::Terminator<'tcx>,
     ) -> MergingSucc {
         debug!("codegen_terminator: {:?}", terminator);
+
+        let unsafe_or_not =
+            if let Some(scope_data) = self.mir.source_scopes.get(terminator.source_info.scope) {
+                if let mir::ClearCrossCrate::Set(ref localdata) = scope_data.local_data {
+                    if let mir::Safety::ExplicitUnsafe(_) = localdata.safety {
+                        true
+                    } else if let mir::Safety::BuiltinUnsafe = localdata.safety {
+                        true
+                    } else if let mir::Safety::FnUnsafe = localdata.safety {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+        bx.set_safety(unsafe_or_not);
 
         let helper = TerminatorCodegenHelper { bb, terminator };
 
